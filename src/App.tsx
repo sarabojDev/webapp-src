@@ -1,6 +1,5 @@
 
 import RootRouter from './pages/RootRouter/router'
- 
 
 
 const App = () => {

@@ -1,15 +1,23 @@
-import  { useState } from 'react'
+import { useState } from 'react'
 import coverVideo from '../../../assets/videos/bg-cover-2.mp4'
 import { Button } from '@/components/ui/button'
 import StaggerText from "react-stagger-text"
-import { ExternalLink, LogIn } from 'lucide-react'
+import { ExternalLink, Loader, LogIn } from 'lucide-react'
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useForm, SubmitHandler } from "react-hook-form"
 import ForgotPassModal from '../Forgot-pass/ForgotPassModal'
-import { useNavigate } from 'react-router-dom'
-// import { ModeToggle } from '@/components/mode-toggle'
+import LogoImg1 from '../../../assets/images/logo1.png'
+import { useDispatch, useSelector } from 'react-redux'
+import { OverAllReducerType } from '@/types/overAllReducerType'
+import { LoginState } from '@/types/userlogintype'
+import LoadingPage from '@/pages/DefaultPages/LoadingPage'
+import { Navigate } from 'react-router-dom'
+
+import { useToast } from '@/hooks/use-toast'
+import useRefreshToken from '@/hooks/useRefreshToken'
+import { loginSuccess } from '@/store/loginUserSlice'
 
 
 type Inputs = {
@@ -17,27 +25,81 @@ type Inputs = {
   password: string
 }
 
+
+const API_URL = import.meta.env.VITE_API_URL
+const AUTH_URL = import.meta.env.VITE_API_AUTH_PATH
+
 const SignInPage = () => {
-  const navigater = useNavigate()
+  useRefreshToken()
+  const { toast } = useToast();
   const {
     register,
     handleSubmit,
     formState: { errors },
   } = useForm<Inputs>();
+  const { loading, user } = useSelector<OverAllReducerType, LoginState>(state => state.loginUserSlice);
+  const [loadingButton, setLoadingButton] = useState<boolean>(false);
   const [showPass, setShowPass] = useState<boolean>(false);
-  const [forgotPassModal, setForgotPassModal] = useState<boolean>(false)
+  const [forgotPassModal, setForgotPassModal] = useState<boolean>(false);
+  const dispatch = useDispatch()
 
-  const openForgotPassModal = ()=>{
+
+  const openForgotPassModal = () => {
     setForgotPassModal(true)
   }
-  const onSubmit: SubmitHandler<Inputs> = (data) => {
-    console.log(data)
-    navigater("/user")
+
+  const onSubmit: SubmitHandler<Inputs> = async (data) => {
+    try {
+      setLoadingButton(true); // Indicate loading state
+
+      const fetchResponse = await fetch(`${API_URL}${AUTH_URL}/login-user`, {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data), // Spread operator is not needed here
+        credentials: 'include', // Important to include credentials for cookies
+      });
+
+      // Check if the response is OK (status in the range 200-299)
+      if (!fetchResponse.ok) {
+        const errorData = await fetchResponse.json();
+        throw new Error(errorData.message || "An error occurred");
+      }
+
+      const fetchData = await fetchResponse.json();
+
+      if (fetchData.status) {
+        console.log("Success!");
+        dispatch(loginSuccess(fetchData.user))
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Login Failed!",
+          description: fetchData.message,
+        });
+      }
+
+      console.log(fetchData);
+    } catch (error) {
+      console.error("Error:", error);
+      toast({
+        variant: "destructive",
+        title: "Login Failed",
+        description: (error as Error).message || "An unexpected error occurred.",
+      });
+    } finally {
+      setLoadingButton(false); // Ensure loading state is reset in both success and error cases
+    }
   };
+
+
+  if (loading) return <LoadingPage />
+  if (user) return <Navigate to={"/app/hrms"}/>
 
   return (
     <>
-      <div className='w-full h-[632px] md:h-screen relative !font-[Poppins]'>
+      <div className='w-full h-[632px] md:min-h-screen relative !font-[Poppins]'>
 
         {/* FORM AND HERO TEXT CONTEXT BOX */}
         <div className='w-full   md:h-full absolute left-0 top-0 flex items-center justify-center px-2 md:px-5 z-10  '>
@@ -46,7 +108,7 @@ const SignInPage = () => {
           <div className='flex-1 hidden md:block'>
             <div className='w-full'>
               <div className='w-[100px] h-[100px] mx-auto'>
-                <img src="https://firebasestorage.googleapis.com/v0/b/nodal-time-327708.appspot.com/o/assetFiles%2FSidharth-Logo-Final.png?alt=media&token=1275de52-704e-40f3-8d3f-c6f15eed7548&_gl=1*1m95ysb*_ga*MjI1NTgzMjQ3LjE2ODA1ODIwMzY.*_ga_CW55HF8NVT*MTY4NTY4OTk1MC44NC4xLjE2ODU2ODk5NjAuMC4wLjA." alt="Sidharth Logo" />
+                <img src={LogoImg1} alt="Sidharth Logo" />
               </div>
             </div>
             <div className="text-center mx-auto px-2 md:px-5">
@@ -104,7 +166,7 @@ const SignInPage = () => {
 
               {/* Form Component */}
 
-              <div className='space-y-6'>
+              <form onSubmit={handleSubmit(onSubmit)} className='space-y-6'>
                 <div className="grid w-full  items-center gap-3">
                   <Label htmlFor="email" className=''>Email</Label>
                   <Input
@@ -147,10 +209,6 @@ const SignInPage = () => {
                       maxLength: {
                         value: 20,
                         message: "Password cannot exceed 20 characters."
-                      },
-                      pattern: {
-                        value: /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/, // Example pattern: At least one letter and one number
-                        message: "Password must contain at least one letter and one number."
                       }
                     })}
                     type={showPass ? "text" : 'password'}
@@ -171,7 +229,7 @@ const SignInPage = () => {
 
                 <div>
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="show-password" onCheckedChange={(c: boolean) => setShowPass(c)} checked={showPass} />
+                    <Checkbox id="show-password" className='shadow-none border-2 w-5 h-5' onCheckedChange={(c: boolean) => setShowPass(c)} checked={showPass} />
                     <Label htmlFor='show-password' className='text-gray-700 text-sm '>
                       Show password
                     </Label>
@@ -180,16 +238,27 @@ const SignInPage = () => {
 
 
                 <div>
-                  <Button onClick={handleSubmit(onSubmit)} variant={'default'} className='w-full flex items-center gap-2 text-white'>
-                    <span>
-                      SignIn
-                    </span>
-                    <span>
-                      <LogIn size={16} />
-                    </span>
+                  <Button disabled={loadingButton} variant={'default'} className='w-full  text-white'>
+                    {
+                      loadingButton ? <div className='w-full h-full flex items-center justify-center'>
+                        <Loader size={16} className='animate-spin' />
+                      </div> :
+                        <div className='flex items-center justify-center gap-2 w-full'>
+                          <span>
+                            SignIn
+                          </span>
+                          <span>
+                            <LogIn size={16} />
+                          </span>
+                        </div>
+                    }
+
+
+
+
                   </Button>
                 </div>
-              </div>
+              </form>
 
 
               <div className='block md:hidden'>
@@ -245,7 +314,7 @@ const SignInPage = () => {
           />
         </div>
       </div>
-        {/* <ModeToggle/> */}
+      {/* <ModeToggle/> */}
       <ForgotPassModal showModal={forgotPassModal} setModal={setForgotPassModal} />
     </>
   )
